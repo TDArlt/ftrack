@@ -102,3 +102,8 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# Visual Studio / Deployment sourcecode
+deploy_source/.vs/
+deploy_source/SendToFtrackConnect/bin/
+deploy_source/SendToFtrackConnect/obj/

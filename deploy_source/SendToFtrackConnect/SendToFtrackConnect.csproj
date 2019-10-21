@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.0</TargetFramework>
+    <AssemblyName>sendToFtrack</AssemblyName>
+    <Authors>Christian Arlt</Authors>
+    <Company>unexpected GmbH</Company>
+    <Product>Send to ftrack-connect</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ilmerge" Version="3.0.29" />
+  </ItemGroup>
+
+  <Target Name="ILMerge">
+    <!-- the ILMergePath property points to the location of ILMerge.exe console application -->
+    <Exec Command="$(ILMergeConsolePath) Bin\x64\Release\netcoreapp3.0\sendtoftrack.exe  /out:sendtoftrack.exe ^
+    Bin\x64\Release\netcoreapp3.0\sendtoftrack.dll ^
+    Bin\x64\Release\netcoreapp3.0\sendtoftrack.pdb ^
+    Bin\x64\Release\netcoreapp3.0\sendtoftrack.deps.json ^
+    Bin\x64\Release\netcoreapp3.0\sendtoftrack.runtimeconfig.json ^
+    Bin\x64\Release\netcoreapp3.0\sendtoftrack.runtimeconfig.json " />
+  </Target>
+</Project>
