@@ -6,7 +6,8 @@ import threading
 import sys
 import argparse
 import json
-import uuid
+import tempfile
+import os
 
 import ftrack_api
 
@@ -28,7 +29,7 @@ def getRealEntityFromTypedContext(session, entity):
     *entity* should be a tuple containing the entity type of `TypedContext`
     and (more important) the entity id.
     '''
-    return session.get('TypedContext', entity['id'])
+    return session.get(entity[0], entity[1])
 
 def async(fn):
     '''Run *fn* asynchronously.'''
@@ -45,96 +46,7 @@ def get_filter_string(entity_ids):
 
 class MainAction(BaseAction):
     '''This is an bare bone action'''
-
-    ##############################################################################
-    #                                                                            #
-    #                           Space for custom methods                         #
-    #                                                                            #
-    ##############################################################################
-
-
-
-    @async
-    def mainAsyncAction(self, selection, user_id=None):
-        session = ftrack_api.Session(
-            auto_connect_event_hub=False
-        )
-        job = session.create('Job', {
-            'user_id': user_id,
-            'status': 'running',
-            'data': json.dumps({
-                'description': 'Finding real entities'
-            })
-        })
-        session.commit()
-
-        try:
-            # Do, whatever you like
-            #ftrack-python-api.rtd.ftrack.com/en/latest/example/job.html
-            realEntities = []
-
-            for entity in selection:
-                searchType = 'TypedContext'
-                if (entity['entityType'] == 'task'):
-                    searchType = 'Task'
-
-                realEntities.append(session.get(searchType, entity['entityId']))
-
-            html = "\
-                    <html>\
-                        <body>\
-                        <h3>You selected:</h3>\
-                            {0}\
-                        </body>\
-                    </html>" .format(realEntities)
-
-            # have a html file to attach to job list
-            filename = "/example-{0}.html".format(str(uuid.uuid1()))
-            
-            server_location = session.query('Location where name is "ftrack.server"').one()
-            #f=open(filename,"w")
-            #f.write(html)
-            #f.close()
-            component = session.create_component(
-                filename,
-                data={'name': 'My file'},
-                location='auto'
-            )
-            session.commit()
-            #session.create(
-            #    'JobComponent',
-            #    {'component_id': component['id'], 'job_id': job['id']}
-            #)
-
-
-            job['status'] = 'done'
-            session.commit()
-
-        except BaseException as exc:
-            self.logger.exception('Async action failed')
-            session.rollback()
-            job['status'] = 'failed'
-            job['data'] = json.dumps({
-                'description': exc.message
-            })
-            session.commit()
-
-            
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    
     ##############################################################################
     #                                                                            #
     #                        Main parameters to be changed                       #
@@ -155,7 +67,7 @@ class MainAction(BaseAction):
 
     #: The types of entities you like to support here
     SUPPORTED_ENTITY_TYPES = (
-        'task' #'project', 'component', 'task'
+        'Project', 'Component', 'Task', 'TypedContext'
     )
 
     def discover(self, session, entities, event):
@@ -178,15 +90,13 @@ class MainAction(BaseAction):
         # Probably, you like to use getRealEntityFromTypedContext() to find out about
         # which entities you got here
 
-        # Get selection
-        selection = data = event['data']['selection']
         
         # Sample method: There needs to be at least one selected and bust be within the supported types
-        if (len(selection) >= 1):
+        if (len(entities) >= 1):
             isValid = True
 
-            for sel in selection:
-                if (sel['entityType'].lower() not in self.SUPPORTED_ENTITY_TYPES):
+            for entity in entities:
+                if (entity[0] not in self.SUPPORTED_ENTITY_TYPES):
                     isValid = False
             
             return isValid
@@ -225,9 +135,8 @@ class MainAction(BaseAction):
         # TODO: Write your custom method for your action
         # Probably, you like to use getRealEntityFromTypedContext() to find out about
         # which entities you got here
-
         # Sample: Run async method
-        self.mainAsyncAction(data['selection'], event['source']['user']['id'])
+        self.mainAsyncAction(entities, event['source']['user']['id'])
 
 
         return {
@@ -238,12 +147,142 @@ class MainAction(BaseAction):
 
     ##############################################################################
     #                                                                            #
-    # You do not need to edit something below, as these are just utility methods #
-    #                      for discovery and registration                        #
+    #                           Space for custom methods                         #
     #                                                                            #
     ##############################################################################
 
 
+
+    @async
+    def mainAsyncAction(self, entities, user_id=None):
+        '''
+        The main action this one is doing inside a job
+
+        See a sample at https://ftrack-python-api.rtd.ftrack.com/en/latest/example/job.html
+        
+        or https://bitbucket.org/ftrack/ftrack-recipes/src/master/python/actions/create_report/hook/create_report.py
+        '''
+        
+        # Setup a session for the running job
+        session = ftrack_api.Session(
+            auto_connect_event_hub=False
+        )
+        job = session.create('Job', {
+            'user_id': user_id,
+            'status': 'running',
+            'data': json.dumps({
+                'description': 'Collecting your selection'
+            })
+        })
+        session.commit()
+
+        try:
+            # Do, whatever you like
+
+
+
+            # In this sample, we are collecting the entities
+            # and print a list into a text file
+            realEntities = []
+            printString = ""
+
+            for entity in entities:
+                oneObject = getRealEntityFromTypedContext(session, entity)
+                realEntities.append(oneObject)
+
+                printString += "\t- {0} (Type: {1}), due date: {2}\n".format(oneObject['name'], type(oneObject).__name__, oneObject['end_date'])
+            
+            filecontent = "You selected:\n{0}" .format(printString)
+
+
+
+
+
+            # Generate unique temp file name
+            file_path = tempfile.NamedTemporaryFile(
+                prefix='example_collection', 
+                suffix='.txt', 
+                delete=False
+            ).name
+
+            # Write to file
+            f=open(file_path,"w")
+            f.write(filecontent)
+            f.close()
+
+            # Create file component for job
+            job_file = os.path.basename(file_path).replace('.txt', '')
+            component = session.create_component(
+                file_path,
+                data={'name': job_file},
+                location=session.query(u"Location where name is 'ftrack.server'").one()
+            )
+            session.commit()
+
+            # Attach to job
+            session.create(
+                'JobComponent',
+                {
+                    'component_id': component['id'], 
+                    'job_id': job['id']
+                }
+            )
+            
+            # Set job status as done
+            job['status'] = 'done'
+            job['data'] = json.dumps({
+                'description': 'Click to download your selection'
+            })
+            session.commit()
+
+        except BaseException as exc:
+            # Error handling: Write error
+            self.logger.exception('Async action failed')
+            session.rollback()
+            job['status'] = 'failed'
+            job['data'] = json.dumps({
+                'description': exc.message
+            })
+            session.commit()
+
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+
+
+    ##############################################################################
+    #                                                                            #
+    # You do not need to edit something below, as these are just utility methods #
+    #                   for discovery, registration and more                     #
+    #                                                                            #
+    ##############################################################################
+
+
+    @property
+    def session(self):
+        '''Return convenient exposure of the self._session reference.'''
+        return self._session
+
+    @property
+    def ftrack_server_location(self):
+        '''Return the ftrack.server location.'''
+        return self.session.query(
+            u"Location where name is 'ftrack.server'"
+        ).one()
 
 
     def _discover(self, event):
