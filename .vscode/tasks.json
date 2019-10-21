@@ -7,10 +7,6 @@
             "label": "Deploy to ftrack-connect",
             "type": "shell",
             "command": "./sendToFtrack.exe",
-            "args": [
-                "-s",
-                "${file}"
-            ],
             "presentation": {
                 "echo": false,
                 "reveal": "never",
