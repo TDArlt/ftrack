@@ -89,7 +89,9 @@ class MainAction(BaseAction):
         # TODO: Write your custom method to define if this one is discoverable or not
         # Probably, you like to use getRealEntityFromTypedContext() to find out about
         # which entities you got here
-
+        # For the moment, this will always return False, so that it doesn't disturb anything
+        # as long as this is just a boilerplate
+        return False
         
         # Sample method: There needs to be at least one selected and bust be within the supported types
         if (len(entities) >= 1):
