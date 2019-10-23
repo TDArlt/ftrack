@@ -107,3 +107,6 @@ venv.bak/
 deploy_source/.vs/
 deploy_source/SendToFtrackConnect/bin/
 deploy_source/SendToFtrackConnect/obj/
+
+# Internal files (not in VCS)
+.psd/
