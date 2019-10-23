@@ -63,7 +63,7 @@ class MainAction(BaseAction):
     description = 'A test case for ftrack Action'
 
     #: Icon for this one
-    icon = 'https://mediathek.unexpected.de/img/applogo.png'
+    icon = 'https://mediathek.unexpected.de/img/ftrack/testing.png'
 
     #: The types of entities you like to support here
     SUPPORTED_ENTITY_TYPES = (

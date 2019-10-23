@@ -44,8 +44,8 @@ def get_filter_string(entity_ids):
         '"{0}"'.format(entity_id) for entity_id in entity_ids
     )
 
-class MainAction(BaseAction):
-    '''This is an bare bone action'''
+class unexCreateGanttChartAction(BaseAction):
+    '''This is the action for creating a Gantt Chart'''
     
     ##############################################################################
     #                                                                            #
@@ -64,7 +64,7 @@ class MainAction(BaseAction):
 
     #: Icon for this one
     #: Basis for this icon made by Freepik from www.flaticon.com
-    icon = 'https://mediathek.unexpected.de/img/gantticon.png'
+    icon = 'https://mediathek.unexpected.de/img/ftrack/gantt.png'
 
     #: The types of entities you like to support here
     SUPPORTED_ENTITY_TYPES = (
@@ -324,7 +324,7 @@ def register(session, **kw):
     if not isinstance(session, ftrack_api.session.Session):
         return
 
-    action_handler = MainAction(session)
+    action_handler = unexCreateGanttChartAction(session)
     action_handler.register()
 
 
