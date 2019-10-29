@@ -35,7 +35,7 @@ def get_filter_string(entity_ids):
         '"{0}"'.format(entity_id) for entity_id in entity_ids
     )
 
-class unexOpenFileAction(BaseAction):
+class unexOpenRenderingAction(BaseAction):
     '''This action will open an associated rendering'''
     
     ##############################################################################
@@ -297,7 +297,7 @@ def register(session, **kw):
     if not isinstance(session, ftrack_api.session.Session):
         return
 
-    action_handler = unexOpenFileAction(session)
+    action_handler = unexOpenRenderingAction(session)
     action_handler.register()
 
 
