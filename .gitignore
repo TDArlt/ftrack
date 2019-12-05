@@ -110,3 +110,4 @@ deploy_source/SendToFtrackConnect/obj/
 
 # Internal files (not in VCS)
 .psd/
+.vscode/settings.json
