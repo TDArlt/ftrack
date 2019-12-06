@@ -123,6 +123,72 @@ class unexCreateGanttChartAction(BaseAction):
             self.logger.info('No element selected!')
             return False
 
+    def interface(self, session, entities, event):
+        '''The user interface for our action
+
+        *session* is a `ftrack_api.Session` instance
+
+        *entities* is a list of tuples each containing the entity type and the entity id.
+        If the entity is a hierarchical you will always get the entity
+        type TypedContext, once retrieved through a get operation you
+        will have the "real" entity type ie. example Shot, Sequence
+        or Asset Build.
+
+        *event* the unmodified original event
+        '''
+        values = event['data'].get('values', {})
+
+        firstObjInfo = getRealEntityFromTypedContext(session, entities[0])
+
+        if (len(entities) == 1):
+            if (type(firstObjInfo).__name__ == 'Project'):
+                textDescription = 'Exporting a Gantt Chart for {0}'.format(firstObjInfo['full_name'])
+            else:
+                textDescription = 'Exporting a Gantt Chart for {0}'.format(firstObjInfo['name'])
+        else:
+            if (type(firstObjInfo).__name__ == 'Project'):
+                textDescription = 'Exporting a Gantt Chart for {0} and {1} more'.format(firstObjInfo['full_name'], len(entities - 1))
+            else:
+                textDescription = 'Exporting a Gantt Chart for {0} and {1} more'.format(firstObjInfo['name'], len(entities - 1))
+
+        if not values:
+            return [
+                {
+                    'type': 'label',
+                    'value': textDescription
+                },
+                {
+                    'type': 'label',
+                    'value': '___'
+                },
+                {
+                    'type': 'label',
+                    'value': 'Properties for export:'
+                },
+                {
+                    'label': 'Show assignees',
+                    'type': 'boolean',
+                    'name': 'show_assignees',
+                    'value': 'False'
+                },
+                {
+                    'label': 'Show current tasks\' status',
+                    'type': 'boolean',
+                    'name': 'show_status',
+                    'value': 'False'
+                },
+                {
+                    'type': 'label',
+                    'value': '___'
+                },
+                {
+                    'label': 'URL to custom CSS (if desired):',
+                    'type': 'text',
+                    'name': 'custom_css',
+                    'value': ''
+                }
+            ]
+
 
     def launch(self, session, entities, event):
         '''Callback method for the custom action.
@@ -143,22 +209,30 @@ class unexCreateGanttChartAction(BaseAction):
         *event* the unmodified original event
 
         '''
+        try:
+            if 'values' in event['data']:
+                self.logger.info(
+                    u'Launching action with selection {0}'.format(entities)
+                )
 
-        self.logger.info(
-            u'Launching action with selection {0}'.format(entities)
-        )
+                data = event['data']
+                logging.info(u'Launching action with data: {0}'.format(data))
 
-        data = event['data']
-        logging.info(u'Launching action with data: {0}'.format(data))
-
-        # Run exporter
-        self.mainAsyncAction(entities, event['source']['user']['id'])
+                # Run exporter
+                self.mainAsyncAction(entities, event['source']['user']['id'], data['values'])
 
 
-        return {
-            'success': True,
-            'message': 'Export started...'
-        }
+                return {
+                    'success': True,
+                    'message': 'Export started...'
+                }
+
+        except BaseException as exc:
+            return {
+                    'success': False,
+                    'message': exc.message.replace("<", "&lt;").replace(">", "&gt;")
+                }
+            
 
 
     ##############################################################################
@@ -170,7 +244,7 @@ class unexCreateGanttChartAction(BaseAction):
 
 
     @async
-    def mainAsyncAction(self, entities, user_id=None):
+    def mainAsyncAction(self, entities, user_id, settings):
         '''
         The main action this one is doing inside a job
         '''
@@ -189,12 +263,6 @@ class unexCreateGanttChartAction(BaseAction):
         session.commit()
 
         try:
-            # TODO: Selection form before starting job:
-            #  - Select, if we like to show assignee and status as well (which might not be a good idea for clients)
-            #  - Select the scaling width (to create a scrollable page)
-
-            # TODO: What about additional information (assignee, status)?
-            # TODO: What about scaling of the chart? => Might just be a css-property on "main"-div (but we need to scale the marks as well!)
             # TODO: What about connections between tasks? => Show arrows?
             # TODO: What about hierarchy (sort and show parent-grouping?)
 
@@ -202,6 +270,7 @@ class unexCreateGanttChartAction(BaseAction):
     
             realEntities = []
             printString = ""
+            headline = "Overview"
 
             for entity in entities:
                 oneObject = getRealEntityFromTypedContext(session, entity)
@@ -212,6 +281,8 @@ class unexCreateGanttChartAction(BaseAction):
                     realEntities.extend(tasks)
                     milestones = session.query('select id from Milestone where project.name is "' + oneObject['name'] + '"')
                     realEntities.extend(milestones)
+
+                    headline = oneObject['full_name']
                 else:
                     realEntities.append(oneObject)
             
@@ -236,12 +307,30 @@ class unexCreateGanttChartAction(BaseAction):
 
             # Generate HTML file
 
+            taskHeight = 38
+            if settings['show_assignees']:
+                taskHeight += 8
+
             # CSS
             cssStyle = '''
             body {
                 font-family: 'Roboto', sans-serif;
                 padding: 0pt;
                 margin: 0pt;
+            }
+            .headline {
+                font-size: 18pt;
+                font-weight: bold;
+                padding: 5pt;
+                margin: 0pt;
+            }
+
+            @media print
+            {    
+                .no-print, .no-print *
+                {
+                    display: none !important;
+                }
             }
 
             .main {
@@ -276,11 +365,16 @@ class unexCreateGanttChartAction(BaseAction):
                 font-weight: bold;
                 box-sizing: border-box;
             }
+            .week_mark {
+                padding-top: 12pt;
+                border-left-color: #aaa;
+                z-index: -5;
+            }
 
             .task {
                 margin: 0pt 0pt 2pt 0pt;
                 padding: 5pt;
-                height: 38pt;
+                height: ''' + str(taskHeight) + '''pt;
                 position: relative;
                 border: 1pt solid #000;
                 border-radius: 2pt;
@@ -310,6 +404,30 @@ class unexCreateGanttChartAction(BaseAction):
             .task .type {
                 font-size: 7pt;
             }
+
+            .task .assigned {
+                font-size: 7pt;
+            }
+            .task .assigned .user {
+                font-size: 7pt;
+                display: inline;
+            }
+
+            .task .status {
+                font-size: 7pt;
+                display: inline-block;
+                border-radius: 2pt;
+                padding: 2pt;
+                position: absolute;
+                top: 0pt;
+                right: 0pt;
+                opacity: 0.9;
+                transition: all .3s;
+            }
+            .task .status:hover {
+                opacity: 1;
+            }
+
 
             .milestone {
                 margin: 0pt 0pt 2pt 0pt;
@@ -342,19 +460,51 @@ class unexCreateGanttChartAction(BaseAction):
             }
 
 
+
+            .scale {
+                position: fixed;
+                opacity: .2;
+                top: 0pt;
+                right: 0pt;
+                width: 100pt;
+                background-color: #fff;
+                border: 1pt #000 solid;
+                padding: 0pt;
+                transition: all .3s;
+                border-top: 0pt;
+                border-right: 0pt;
+                border-radius: 0pt 0pt 0pt 5pt;
+            }
+
+            .scale:hover {
+                opacity: 1;
+            }
+
+            .scale input {
+                width: 90pt;
+                margin-left: 5pt;
+            }
+
+
             '''
 
             # General beginning
 
+            custom_css = ""
+            if settings['custom_css'] != '':
+                custom_css = '<link rel="stylesheet" href="' + settings['custom_css'] + '" />'
+
             filecontent = '''
             <html>
                 <head>
-                    <title>Gantt Chart</title>
+                    <title>''' + headline + '''</title>
+                    <meta charset="utf-8">
                     <link href="https://fonts.googleapis.com/css?family=Roboto&display=swap" rel="stylesheet"> 
                     <style>''' + cssStyle + '''</style>
                 </head>
                 <body>
-                <div class="main">
+                <div class="headline">''' + headline + '''</div>
+                <div class="main" id="mainpage">
                     <div id="marks">
             '''
 
@@ -362,21 +512,24 @@ class unexCreateGanttChartAction(BaseAction):
             for single_date in daterange(minDate, maxDate):
                 tLeft = ((single_date - minDate).days / float(daycount)) * 100.0
 
+                # mark weekends
                 if (single_date.weekday() == 5):
                     tLength = (2.0 / float(daycount)) * 100.0
                     filecontent += '''
                         <div class="weekend_mark" style="left: ''' + str(tLeft) + '''%; width: ''' + str(tLength) + '''%;"></div>
                     '''
-                # if we have less than two months in our overview, mark each week beginning
-                if (daycount < 60 and single_date.weekday() == 0):
+                
+                # mark each week beginning
+                if (single_date.weekday() == 0):
                     tLength = (7.0 / float(daycount)) * 100.0
                     filecontent += '''
                         <div class="week_mark" style="left: ''' + str(tLeft) + '''%; width: ''' + str(tLength) + '''%;">
                             <div class="caption">''' + single_date.strftime("%m/%d") + '''</div>
                         </div>
                     '''
-                elif (daycount > 60 and single_date.day == 1):
-                    # Otherwise, mark first day of month
+                
+                if (single_date.day == 1):
+                    # mark first day of month
                     tLength = (calendar.monthrange(single_date.year, single_date.month)[1] / float(daycount)) * 100.0
                     filecontent += '''
                         <div class="month_mark" style="left: ''' + str(tLeft) + '''%; width: ''' + str(tLength) + '''%;">
@@ -395,6 +548,24 @@ class unexCreateGanttChartAction(BaseAction):
             # Write all tasks
             for task in realEntities:
                 if (type(task).__name__ == "Task"):
+                    statusText = ""
+                    assigneesText = ""
+
+                    if settings['show_status']:
+                        statusText = '<div class="status" style="background-color: ' + task['status']['color'] + ';">' + task['status']['name'] + '</div>'
+                    
+                    if settings['show_assignees']:
+                        assignedUsers = []
+
+                        for assignment in task['assignments']:
+                            if (type(assignment['resource']).__name__ == 'User'):
+                                assignedUsers.append('<div class="user">' + assignment['resource']['first_name'] + " " + assignment['resource']['last_name'] + '</div>')
+                        
+                        if (len(assignedUsers) > 0):
+                            assigneesText = '<div class="assigned">' + ', '.join(assignedUsers) + '</div>'
+                        else:
+                            assigneesText = '<div class="assigned">(unassigned)</div>'
+
                     if (task['start_date'] != None and task['end_date'] != None):
                         # Task with defined dates: Calculate ranges
                         tStartDate = datetime.datetime(task['start_date'].year, task['start_date'].month, task['start_date'].day, task['start_date'].hour, task['start_date'].minute)
@@ -410,6 +581,7 @@ class unexCreateGanttChartAction(BaseAction):
                                 <div class="start">''' + task['start_date'].strftime("%Y/%m/%d") + '''</div>
                                 <div class="end">''' + task['end_date'].strftime("%Y/%m/%d") + '''</div>
                                 <div class="type">''' + task['type']['name'] + '''</div>
+                                ''' + statusText + assigneesText + '''
                             </div>
                         '''
                     else:
@@ -432,6 +604,7 @@ class unexCreateGanttChartAction(BaseAction):
                                 <div class="name">''' + task['name'] + '''</div>
                                 <div class="end">''' + task['end_date'].strftime("%Y/%m/%d") + '''</div>
                                 <div class="type">''' + task['type']['name'] + '''</div>
+                                ''' + statusText + assigneesText + '''
                             </div>
                             '''
                         elif (task['start_date'] != None):
@@ -448,6 +621,7 @@ class unexCreateGanttChartAction(BaseAction):
                                 <div class="name">''' + task['name'] + '''</div>
                                 <div class="start">''' + task['start_date'].strftime("%Y/%m/%d") + '''</div>
                                 <div class="type">''' + task['type']['name'] + '''</div>
+                                ''' + statusText + assigneesText + '''
                             </div>
                             '''
                         else:
@@ -458,6 +632,7 @@ class unexCreateGanttChartAction(BaseAction):
                             <div class="task" style="left: ''' + str(tLeft) + '''%; width: ''' + str(tLength) + '''%; background-color: ''' + task['type']['color'] + '''C0;">
                                 <div class="name">''' + task['name'] + '''</div>
                                 <div class="type">''' + task['type']['name'] + '''</div>
+                                ''' + statusText + assigneesText + '''
                             </div>
                             '''
 
@@ -494,6 +669,43 @@ class unexCreateGanttChartAction(BaseAction):
             # General ending
 
             filecontent += '''
+                    </div>
+
+                    <div class="no-print">
+                        <div class="scale">
+                            <input type="range" min="800" max="5000" value="50" class="slider" id="scaleRange" onchange="Scale()">
+                        </div>
+                        <script>
+
+function Scale()
+{
+    document.getElementById("mainpage").style.width = document.getElementById("scaleRange").value + "px";
+    UpdateWeekMarks();
+}
+function UpdateWeekMarks()
+{
+    marks = document.getElementsByClassName("week_mark");
+    monthMarks = document.getElementsByClassName("month_mark");
+
+    if (monthMarks.length > 0 && monthMarks[0].offsetWidth < 310)
+    {
+        for (i = 0; i < marks.length; i++)
+        {
+            marks[i].style.display = "none";
+        }
+    } else
+    {
+        for (i = 0; i < marks.length; i++)
+        {
+            marks[i].style.display = "block";
+        }
+    }
+}
+
+document.getElementById("scaleRange").value = document.getElementById("mainpage").offsetWidth;
+UpdateWeekMarks();
+
+                        </script>
                     </div>
                 </div>
             </html>
@@ -542,7 +754,7 @@ class unexCreateGanttChartAction(BaseAction):
             session.rollback()
             job['status'] = 'failed'
             job['data'] = json.dumps({
-                'description': exc.message
+                'description': exc.message.replace("<", "&lt;").replace(">", "&gt;")
             })
             session.commit()
 
