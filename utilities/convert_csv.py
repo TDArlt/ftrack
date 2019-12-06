@@ -1,3 +1,6 @@
+# :copyright: Copyright (c) 2019 c.arlt@unexpected.de
+# :license: GPL-3.0
+
 # Definitions (this is what you might want to change)
 # Please make sure these exist. Otherwise you will get very strange results...
 

@@ -1,5 +1,6 @@
 # :coding: utf-8
-# :copyright: Copyright (c) 2015 ftrack
+# :copyright: Copyright (c) 2019 c.arlt@unexpected.de
+# :license: GPL-3.0
 
 import logging
 import threading
