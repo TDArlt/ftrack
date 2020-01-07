@@ -147,9 +147,9 @@ class unexCreateGanttChartAction(BaseAction):
                 textDescription = 'Exporting a Gantt Chart for {0}'.format(firstObjInfo['name'])
         else:
             if (type(firstObjInfo).__name__ == 'Project'):
-                textDescription = 'Exporting a Gantt Chart for {0} and {1} more'.format(firstObjInfo['full_name'], len(entities - 1))
+                textDescription = 'Exporting a Gantt Chart for {0} and {1} more'.format(firstObjInfo['full_name'], len(entities) -1)
             else:
-                textDescription = 'Exporting a Gantt Chart for {0} and {1} more'.format(firstObjInfo['name'], len(entities - 1))
+                textDescription = 'Exporting a Gantt Chart for {0} and {1} more'.format(firstObjInfo['name'], len(entities) - 1)
 
         if not values:
             return [
@@ -720,7 +720,7 @@ UpdateWeekMarks();
 
             # Write to file
             f=open(file_path,"w")
-            f.write(filecontent)
+            f.write(filecontent.encode('utf-8'))
             f.close()
 
             # Create file component for job
